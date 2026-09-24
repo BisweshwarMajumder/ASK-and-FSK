@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ASK & BFSK Moving Waveform & Transceiver Simulator</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Custom scrollbar and canvas styling */
+    canvas {
+      display: block;
+      width: 100%;
+      image-rendering: auto;
+    }
+    input[type="range"] {
+      accent-color: var(--primary, #3b82f6);
+    }
+  </style>
+</head>
+<body class="bg-[var(--background,#0f172a)] text-[var(--foreground,#f8fafc)] antialiased p-4 md:p-6 font-sans">
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <header class="bg-[var(--card,#1e293b)] border border-[var(--border,#334155)] rounded-2xl p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center justify-center p-2 rounded-lg bg-blue-500/20 text-blue-400 font-mono text-sm">
+            📡 DSP-LAB
+          </span>
+          <h1 class="text-xl md:text-2xl font-bold tracking-tight text-[var(--foreground,#f8fafc)]">
+            ASK & BFSK Real-Time Moving Waveform Lab
+          </h1>
+        </div>
+        <p class="text-[var(--muted-foreground,#94a3b8)] text-sm mt-1">
+          Interactive real-time moving oscilloscope, coherent correlator, and noncoherent quadrature detector simulator.
+        </p>
+      </div>
+
+      <!-- Playback Actions -->
+      <div class="flex items-center gap-2">
+        <button id="btnPlayPause" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl shadow transition-all flex items-center gap-2 text-sm">
+          <span id="playIcon">⏸</span> <span id="playText">Pause</span>
+        </button>
+        <button id="btnReset" class="px-3 py-2 bg-[var(--surface,#334155)] hover:bg-[var(--surface-hover,#475569)] text-[var(--foreground,#f8fafc)] font-medium rounded-xl border border-[var(--border,#475569)] text-sm transition-all">
+          🔄 Reset Bits
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Grid: Controls & Waveforms -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Interactive Webform / Control Panel (4 Columns) -->
+      <div class="lg:col-span-4 space-y-4">
+        <div class="bg-[var(--card,#1e293b)] border border-[var(--border,#334155)] rounded-2xl p-5 space-y-5 shadow-md">
+          <h2 class="text-base font-semibold text-[var(--foreground,#f8fafc)] flex items-center justify-between border-b border-[var(--border,#334155)] pb-3">
+            <span>⚙️ Modulation Settings</span>
+            <span id="badgeMode" class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 font-mono">BFSK</span>
+          </h2>
+
+          <!-- Scheme Selection -->
+          <div class="space-y-2">
+            <label class="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground,#94a3b8)]">Modulation Scheme</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="modeBFSK" class="py-2 px-3 text-sm font-medium rounded-xl bg-blue-600 text-white shadow-sm border border-blue-400 transition-all">
+                BFSK
+              </button>
+              <button id="modeASK" class="py-2 px-3 text-sm font-medium rounded-xl bg-[var(--surface,#334155)] text-[var(--muted-foreground,#94a3b8)] hover:text-white border border-[var(--border,#475569)] transition-all">
+                ASK / OOK
+              </button>
+            </div>
+          </div>
+
+          <!-- Bitstream Input -->
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <label class="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground,#94a3b8)]">Input Bit Sequence</label>
+              <button id="btnRandomBits" class="text-xs text-blue-400 hover:underline">Randomize</button>
+            </div>
+            <input type="text" id="bitstreamInput" value="1 0 1 1 0 1 0 0 1 1 0" class="w-full bg-[var(--surface,#0f172a)] border border-[var(--border,#334155)] rounded-xl px-3 py-2 text-sm font-mono text-emerald-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+
+          <!-- Sliders -->
+          <div class="space-y-4 text-xs">
+            <!-- Bit Rate / Symbol Period -->
+            <div class="space-y-1">
+              <div class="flex justify-between">
+                <span class="text-[var(--foreground,#f8fafc)] font-medium">Bit Duration ($T_b$)</span>
+                <span id="valTb" class="font-mono text-blue-400">1.0 s</span>
+              </div>
+              <input type="range" id="sliderSpeed" min="0.5" max="3.0" step="0.1" value="1.5" class="w-full">
+            </div>
+
+            <!-- FSK Tone Spacing / Frequencies -->
+            <div id="bfskFreqControls" class="space-y-3 pt-2 border-t border-[var(--border,#334155)]">
+              <div class="space-y-1">
+                <div class="flex justify-between">
+                  <span class="text-[var(--foreground,#f8fafc)] font-medium">Tone 0 Freq ($f_0$)</span>
+                  <span id="valF0" class="font-mono text-amber-400">2.0 Hz</span>
+                </div>
+                <input type="range" id="sliderF0" min="1.0" max="6.0" step="0.5" value="2.0" class="w-full">
+              </div>
+
+              <div class="space-y-1">
+                <div class="flex justify-between">
+                  <span class="text-[var(--foreground,#f8fafc)] font-medium">Tone Spacing ($\Delta f = f_1 - f_0$)</span>
+                  <span id="valDeltaF" class="font-mono text-cyan-400">1.00 Rb (Orthogonal)</span>
+                </div>
+                <input type="range" id="sliderDeltaF" min="0.25" max="3.0" step="0.25" value="1.0" class="w-full">
+              </div>
+              
+              <!-- Quick Orthogonality Preset Buttons -->
+              <div class="flex gap-1 pt-1">
+                <button id="btnPresetCoh" class="flex-1 py-1 px-2 text-[11px] rounded-lg bg-indigo-950 hover:bg-indigo-900 border border-indigo-700 text-indigo-200">
+                  0.5 Rb (Coherent)
+                </button>
+                <button id="btnPresetNoncoh" class="flex-1 py-1 px-2 text-[11px] rounded-lg bg-emerald-950 hover:bg-emerald-900 border border-emerald-700 text-emerald-200">
+                  1.0 Rb (Noncoherent)
+                </button>
+              </div>
+            </div>
+
+            <!-- ASK Carrier Frequency -->
+            <div id="askFreqControls" class="space-y-3 pt-2 border-t border-[var(--border,#334155)] hidden">
+              <div class="space-y-1">
+                <div class="flex justify-between">
+                  <span class="text-[var(--foreground,#f8fafc)] font-medium">Carrier Freq ($f_c$)</span>
+                  <span id="valFc" class="font-mono text-blue-400">3.0 Hz</span>
+                </div>
+                <input type="range" id="sliderFc" min="1.0" max="8.0" step="0.5" value="3.0" class="w-full">
+              </div>
+            </div>
+
+            <!-- AWGN Noise Level (SNR) -->
+            <div class="space-y-1 pt-2 border-t border-[var(--border,#334155)]">
+              <div class="flex justify-between">
+                <span class="text-[var(--foreground,#f8fafc)] font-medium">Channel AWGN Noise</span>
+                <span id="valNoise" class="font-mono text-rose-400">$\sigma_n = 0.15$</span>
+              </div>
+              <input type="range" id="sliderNoise" min="0.0" max="1.5" step="0.05" value="0.15" class="w-full">
+            </div>
+
+            <!-- Channel Phase Offset -->
+            <div class="space-y-1">
+              <div class="flex justify-between">
+                <span class="text-[var(--foreground,#f8fafc)] font-medium">Channel Phase Offset ($\Delta\theta$)</span>
+                <span id="valPhase" class="font-mono text-purple-400">0°</span>
+              </div>
+              <input type="range" id="sliderPhase" min="0" max="360" step="15" value="0" class="w-full">
+            </div>
+          </div>
+        </div>
+
+        <!-- Orthogonality Status Card -->
+        <div id="orthoCard" class="bg-[var(--card,#1e293b)] border border-[var(--border,#334155)] rounded-2xl p-4 shadow-sm space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-[var(--muted-foreground,#94a3b8)]">Orthogonality Check</span>
+            <span id="orthoStatusBadge" class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">
+              ✓ Noncoherent Orthogonal
+            </span>
+          </div>
+          <p id="orthoExplanation" class="text-xs text-[var(--muted-foreground,#94a3b8)] leading-relaxed">
+            $\Delta f = 1.0 \times R_b$. Cross-correlation is exactly 0 for any arbitrary channel phase rotation $\Delta\theta$.
+          </p>
+          <div class="h-20 w-full bg-[var(--surface,#0f172a)] rounded-lg p-1">
+            <canvas id="canvasSinc" height="70"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Oscilloscope / Waveforms Screen (8 Columns) -->
+      <div class="lg:col-span-8 space-y-4">
+        
+        <!-- Live Moving Oscilloscope Container -->
+        <div class="bg-[var(--card,#1e293b)] border border-[var(--border,#334155)] rounded-2xl p-4 md:p-5 shadow-lg space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border,#334155)] pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="text-sm font-semibold text-[var(--foreground,#f8fafc)] tracking-wide">
+                Live Moving Waveform Display
+              </span>
+            </div>
+            <div class="flex items-center gap-3 text-xs font-mono">
+              <span class="text-blue-400">■ Tx Modulated</span>
+              <span class="text-emerald-400">■ Digital Bits</span>
+              <span class="text-rose-400">■ Rx + Noise</span>
+              <span class="text-purple-400">■ Detector</span>
+            </div>
+          </div>
+
+          <!-- Trace 1: Baseband Digital Bits -->
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs text-[var(--muted-foreground,#94a3b8)] px-1">
+              <span>(1) Transmitted Baseband NRZ Pulse</span>
+              <span id="lblCurrentBit" class="font-mono text-emerald-400 font-bold">Current Bit: 1</span>
+            </div>
+            <div class="bg-[#0b0f19] border border-slate-800 rounded-xl overflow-hidden p-1 shadow-inner relative">
+              <canvas id="canvasBits" height="65"></canvas>
+            </div>
+          </div>
+
+          <!-- Trace 2: Modulated RF Waveform -->
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs text-[var(--muted-foreground,#94a3b8)] px-1">
+              <span>(2) Transmitted Passband Waveform $s(t)$</span>
+              <span id="lblCarrierInfo" class="font-mono text-blue-400">Tone f1: 3.0 Hz</span>
+            </div>
+            <div class="bg-[#0b0f19] border border-slate-800 rounded-xl overflow-hidden p-1 shadow-inner relative">
+              <canvas id="canvasTx" height="90"></canvas>
+            </div>
+          </div>
+
+          <!-- Trace 3: Channel Output (Noise & Phase Shift) -->
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs text-[var(--muted-foreground,#94a3b8)] px-1">
+              <span>(3) Received Signal $r(t) = s(t)e^{j\Delta\theta} + n(t)$</span>
+              <span id="lblChannelInfo" class="font-mono text-rose-400">Phase: 0° | Noise: σ=0.15</span>
+            </div>
+            <div class="bg-[#0b0f19] border border-slate-800 rounded-xl overflow-hidden p-1 shadow-inner relative">
+              <canvas id="canvasRx" height="90"></canvas>
+            </div>
+          </div>
+
+          <!-- Trace 4: Receivers Correlator Output / Detector Envelopes -->
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs text-[var(--muted-foreground,#94a3b8)] px-1">
+              <span id="lblRxTitle">(4) Receiver Correlators: Coherent vs Noncoherent</span>
+              <span id="lblDecisionInfo" class="font-mono text-cyan-400 font-bold">Decided: 1 (Match)</span>
+            </div>
+            <div class="bg-[#0b0f19] border border-slate-800 rounded-xl overflow-hidden p-1 shadow-inner relative">
+              <canvas id="canvasDet" height="110"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Time Metrics & Decoder Performance -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="bg-[var(--card,#1e293b)] border border-[var(--border,#334155)] rounded-xl p-3 text-center">
+            <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground,#94a3b8)]">Coherent Output</div>
+            <div id="statCohDec" class="text-lg font-bold font-mono text-indigo-400 mt-1">Bit 1</div>
+          </div>
+          <div class="bg-[var(--card,#1e293b)] border border-[var(--border,#334155)] rounded-xl p-3 text-center">
+            <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground,#94a3b8)]">Noncoherent Output</div>
+            <div id="statNoncohDec" class="text-lg font-bold font-mono text-emerald-400 mt-1">Bit 1</div>
+          </div>
+          <div class="bg-[var(--card,#1e293b)] border border-[var(--border,#334155)] rounded-xl p-3 text-center">
+            <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground,#94a3b8)]">Coherent Errors</div>
+            <div id="statCohErrors" class="text-lg font-bold font-mono text-rose-400 mt-1">0 / 0</div>
+          </div>
+          <div class="bg-[var(--card,#1e293b)] border border-[var(--border,#334155)] rounded-xl p-3 text-center">
+            <div class="text-[10px] uppercase font-bold text-[var(--muted-foreground,#94a3b8)]">Noncoh Errors</div>
+            <div id="statNoncohErrors" class="text-lg font-bold font-mono text-amber-400 mt-1">0 / 0</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // System State
+    let mode = 'BFSK'; // 'BFSK' or 'ASK'
+    let isPlaying = true;
+    let time = 0;
+    const dt = 0.016; // animation step
+
+    let bits = [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0];
+    let bitDuration = 1.5; // seconds per bit
+    let f0 = 2.0;          // Tone 0 frequency
+    let deltaFMult = 1.0;  // Spacing in units of Rb (1/bitDuration)
+    let fc = 3.0;          // ASK Carrier frequency
+    let noiseLevel = 0.15;
+    let phaseOffsetDeg = 0;
+
+    let totalBitsProcessed = 0;
+    let cohErrorCount = 0;
+    let noncohErrorCount = 0;
+    let lastEvaluatedBitIndex = -1;
+
+    // Canvas Elements & Contexts
+    const canvasBits = document.getElementById('canvasBits');
+    const ctxBits = canvasBits.getContext('2d');
+    const canvasTx = document.getElementById('canvasTx');
+    const ctxTx = canvasTx.getContext('2d');
+    const canvasRx = document.getElementById('canvasRx');
+    const ctxRx = canvasRx.getContext('2d');
+    const canvasDet = document.getElementById('canvasDet');
+    const ctxDet = canvasDet.getContext('2d');
+    const canvasSinc = document.getElementById('canvasSinc');
+    const ctxSinc = canvasSinc.getContext('2d');
+
+    // High DPI Support
+    function resizeCanvas(canvas) {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      return { width: rect.width, height: rect.height };
+    }
+
+    function initCanvases() {
+      resizeCanvas(canvasBits);
+      resizeCanvas(canvasTx);
+      resizeCanvas(canvasRx);
+      resizeCanvas(canvasDet);
+      resizeCanvas(canvasSinc);
+    }
+    window.addEventListener('resize', initCanvases);
+
+    // DOM Controls
+    const btnPlayPause = document.getElementById('btnPlayPause');
+    const playIcon = document.getElementById('playIcon');
+    const playText = document.getElementById('playText');
+    const btnReset = document.getElementById('btnReset');
+    const btnRandomBits = document.getElementById('btnRandomBits');
+    const bitstreamInput = document.getElementById('bitstreamInput');
+    const modeBFSK = document.getElementById('modeBFSK');
+    const modeASK = document.getElementById('modeASK');
+    const badgeMode = document.getElementById('badgeMode');
+
+    const bfskFreqControls = document.getElementById('bfskFreqControls');
+    const askFreqControls = document.getElementById('askFreqControls');
+
+    const sliderSpeed = document.getElementById('sliderSpeed');
+    const valTb = document.getElementById('valTb');
+    const sliderF0 = document.getElementById('sliderF0');
+    const valF0 = document.getElementById('valF0');
+    const sliderDeltaF = document.getElementById('sliderDeltaF');
+    const valDeltaF = document.getElementById('valDeltaF');
+    const sliderFc = document.getElementById('sliderFc');
+    const valFc = document.getElementById('valFc');
+    const sliderNoise = document.getElementById('sliderNoise');
+    const valNoise = document.getElementById('valNoise');
+    const sliderPhase = document.getElementById('sliderPhase');
+    const valPhase = document.getElementById('valPhase');
+
+    const btnPresetCoh = document.getElementById('btnPresetCoh');
+    const btnPresetNoncoh = document.getElementById('btnPresetNoncoh');
+
+    const orthoStatusBadge = document.getElementById('orthoStatusBadge');
+    const orthoExplanation = document.getElementById('orthoExplanation');
+    const lblCurrentBit = document.getElementById('lblCurrentBit');
+    const lblCarrierInfo = document.getElementById('lblCarrierInfo');
+    const lblChannelInfo = document.getElementById('lblChannelInfo');
+    const lblDecisionInfo = document.getElementById('lblDecisionInfo');
+
+    const statCohDec = document.getElementById('statCohDec');
+    const statNoncohDec = document.getElementById('statNoncohDec');
+    const statCohErrors = document.getElementById('statCohErrors');
+    const statNoncohErrors = document.getElementById('statNoncohErrors');
+
+    // UI Event Handlers
+    btnPlayPause.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      playIcon.textContent = isPlaying ? '⏸' : '▶';
+      playText.textContent = isPlaying ? 'Pause' : 'Play';
+    });
+
+    btnReset.addEventListener('click', () => {
+      time = 0;
+      totalBitsProcessed = 0;
+      cohErrorCount = 0;
+      noncohErrorCount = 0;
+      lastEvaluatedBitIndex = -1;
+      updateStats();
+    });
+
+    btnRandomBits.addEventListener('click', () => {
+      const arr = Array.from({length: 12}, () => Math.round(Math.random()));
+      bitstreamInput.value = arr.join(' ');
+      parseBits();
+    });
+
+    function parseBits() {
+      const parsed = bitstreamInput.value.replace(/[^01]/g, '').split('').map(Number);
+      if (parsed.length > 0) {
+        bits = parsed;
+      }
+    }
+    bitstreamInput.addEventListener('input', parseBits);
+
+    modeBFSK.addEventListener('click', () => {
+      mode = 'BFSK';
+      modeBFSK.className = "py-2 px-3 text-sm font-medium rounded-xl bg-blue-600 text-white shadow-sm border border-blue-400 transition-all";
+      modeASK.className = "py-2 px-3 text-sm font-medium rounded-xl bg-[var(--surface,#334155)] text-[var(--muted-foreground,#94a3b8)] hover:text-white border border-[var(--border,#475569)] transition-all";
+      badgeMode.textContent = 'BFSK';
+      bfskFreqControls.classList.remove('hidden');
+      askFreqControls.classList.add('hidden');
+      document.getElementById('orthoCard').classList.remove('hidden');
+    });
+
+    modeASK.addEventListener('click', () => {
+      mode = 'ASK';
+      modeASK.className = "py-2 px-3 text-sm font-medium rounded-xl bg-blue-600 text-white shadow-sm border border-blue-400 transition-all";
+      modeBFSK.className = "py-2 px-3 text-sm font-medium rounded-xl bg-[var(--surface,#334155)] text-[var(--muted-foreground,#94a3b8)] hover:text-white border border-[var(--border,#475569)] transition-all";
+      badgeMode.textContent = 'ASK / OOK';
+      askFreqControls.classList.remove('hidden');
+      bfskFreqControls.classList.add('hidden');
+      document.getElementById('orthoCard').classList.add('hidden');
+    });
+
+    sliderSpeed.addEventListener('input', (e) => {
+      bitDuration = parseFloat(e.target.value);
+      valTb.textContent = bitDuration.toFixed(1) + ' s';
+      updateOrthoStatus();
+    });
+
+    sliderF0.addEventListener('input', (e) => {
+      f0 = parseFloat(e.target.value);
+      valF0.textContent = f0.toFixed(1) + ' Hz';
+      updateOrthoStatus();
+    });
+
+    sliderDeltaF.addEventListener('input', (e) => {
+      deltaFMult = parseFloat(e.target.value);
+      updateOrthoStatus();
+    });
+
+    btnPresetCoh.addEventListener('click', () => {
+      sliderDeltaF.value = 0.5;
+      deltaFMult = 0.5;
+      updateOrthoStatus();
+    });
+
+    btnPresetNoncoh.addEventListener('click', () => {
+      sliderDeltaF.value = 1.0;
+      deltaFMult = 1.0;
+      updateOrthoStatus();
+    });
+
+    sliderFc.addEventListener('input', (e) => {
+      fc = parseFloat(e.target.value);
+      valFc.textContent = fc.toFixed(1) + ' Hz';
+    });
+
+    sliderNoise.addEventListener('input', (e) => {
+      noiseLevel = parseFloat(e.target.value);
+      valNoise.textContent = 'σ = ' + noiseLevel.toFixed(2);
+    });
+
+    sliderPhase.addEventListener('input', (e) => {
+      phaseOffsetDeg = parseInt(e.target.value);
+      valPhase.textContent = phaseOffsetDeg + '°';
+    });
+
+    function updateOrthoStatus() {
+      const Rb = 1.0 / bitDuration;
+      const actualDeltaF = deltaFMult * Rb;
+      const isCoherentOrtho = Math.abs((actualDeltaF / (0.5 * Rb)) - Math.round(actualDeltaF / (0.5 * Rb))) < 1e-3;
+      const isNoncoherentOrtho = Math.abs((actualDeltaF / Rb) - Math.round(actualDeltaF / Rb)) < 1e-3;
+
+      valDeltaF.textContent = `${deltaFMult.toFixed(2)} Rb (${actualDeltaF.toFixed(2)} Hz)`;
+
+      if (isNoncoherentOrtho) {
+        orthoStatusBadge.className = "text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium";
+        orthoStatusBadge.textContent = "✓ Noncoherent & Coherent Orthogonal";
+        orthoExplanation.textContent = `Δf = ${deltaFMult.toFixed(1)} Rb. Cross-correlation is 0 regardless of carrier phase offset Δθ.`;
+      } else if (isCoherentOrtho) {
+        orthoStatusBadge.className = "text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium";
+        orthoStatusBadge.textContent = "⚠ Coherent-Only Orthogonal";
+        orthoExplanation.textContent = `Δf = 0.5 Rb. Zero cross-correlation ONLY when Δθ = 0. Degrades under unknown carrier phase!`;
+      } else {
+        orthoStatusBadge.className = "text-xs px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 font-medium";
+        orthoStatusBadge.textContent = "✕ Non-Orthogonal (Cross-talk)";
+        orthoExplanation.textContent = `Δf is not an integer multiple of 0.5 Rb. Inherent cross-talk between bit 0 and bit 1 filters.`;
+      }
+      drawSincPlot();
+    }
+
+    function drawSincPlot() {
+      const w = canvasSinc.clientWidth;
+      const h = canvasSinc.clientHeight;
+      ctxSinc.clearRect(0, 0, w, h);
+
+      // Draw axis
+      ctxSinc.strokeStyle = '#334155';
+      ctxSinc.lineWidth = 1;
+      ctxSinc.beginPath();
+      ctxSinc.moveTo(0, h / 2);
+      ctxSinc.lineTo(w, h / 2);
+      ctxSinc.stroke();
+
+      // Sinc function: cross correlation sinc(2 * Delta_f * Tb)
+      ctxSinc.strokeStyle = '#38bdf8';
+      ctxSinc.lineWidth = 1.5;
+      ctxSinc.beginPath();
+
+      const maxDfMult = 3.0;
+      for (let px = 0; px < w; px++) {
+        const dfNorm = (px / w) * maxDfMult;
+        const arg = Math.PI * 2 * dfNorm;
+        const sincVal = arg === 0 ? 1 : Math.sin(arg) / arg;
+        const py = (h / 2) - sincVal * (h * 0.4);
+        if (px === 0) ctxSinc.moveTo(px, py);
+        else ctxSinc.lineTo(px, py);
+      }
+      ctxSinc.stroke();
+
+      // Marker for current deltaFMult
+      const currentX = (deltaFMult / maxDfMult) * w;
+      const argCur = Math.PI * 2 * deltaFMult;
+      const curSinc = argCur === 0 ? 1 : Math.sin(argCur) / argCur;
+      const currentY = (h / 2) - curSinc * (h * 0.4);
+
+      ctxSinc.fillStyle = '#f43f5e';
+      ctxSinc.beginPath();
+      ctxSinc.arc(currentX, currentY, 4, 0, 2 * Math.PI);
+      ctxSinc.fill();
+
+      // Zero crossing ticks at 0.5, 1.0, 1.5, 2.0
+      [0.5, 1.0, 1.5, 2.0, 2.5].forEach(zc => {
+        const zx = (zc / maxDfMult) * w;
+        ctxSinc.fillStyle = '#94a3b8';
+        ctxSinc.font = '8px sans-serif';
+        ctxSinc.fillText(zc + 'R', zx - 8, h - 2);
+      });
+    }
+
+    // Mathematical signal evaluation at time t
+    function getSignalAt(t) {
+      const bitIndex = Math.floor(t / bitDuration) % bits.length;
+      const currentBit = bits[bitIndex];
+      const phaseRad = (phaseOffsetDeg * Math.PI) / 180;
+
+      let tx = 0;
+      let f1 = f0 + deltaFMult * (1.0 / bitDuration);
+
+      if (mode === 'BFSK') {
+        const freq = currentBit === 1 ? f1 : f0;
+        tx = Math.cos(2 * Math.PI * freq * t);
+      } else {
+        // ASK (OOK)
+        const amp = currentBit === 1 ? 1.0 : 0.0;
+        tx = amp * Math.cos(2 * Math.PI * fc * t);
+      }
+
+      // Received with phase rotation & gaussian noise (Box-Muller)
+      const u1 = Math.max(1e-6, Math.random());
+      const u2 = Math.random();
+      const randN = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+      const noise = noiseLevel * randN;
+
+      // Passband phase shift
+      const rx_clean = (mode === 'BFSK') 
+        ? Math.cos(2 * Math.PI * (currentBit === 1 ? f1 : f0) * t + phaseRad)
+        : (currentBit === 1 ? 1.0 : 0.0) * Math.cos(2 * Math.PI * fc * t + phaseRad);
+
+      const rx = rx_clean + noise;
+
+      return { bitIndex, currentBit, tx, rx, f1 };
+    }
+
+    function updateStats() {
+      statCohErrors.textContent = `${cohErrorCount} / ${totalBitsProcessed}`;
+      statNoncohErrors.textContent = `${noncohErrorCount} / ${totalBitsProcessed}`;
+    }
+
+    // Main Animation Loop
+    function animate() {
+      if (isPlaying) {
+        time += dt;
+      }
+
+      const rectB = resizeCanvas(canvasBits);
+      const rectTx = resizeCanvas(canvasTx);
+      const rectRx = resizeCanvas(canvasRx);
+      const rectDet = resizeCanvas(canvasDet);
+
+      const width = rectB.width;
+      const timeWindow = 4.0; // 4 seconds visible on screen
+      const tStart = time - timeWindow;
+      const tEnd = time;
+
+      // Clear canvases
+      [ctxBits, ctxTx, ctxRx, ctxDet].forEach(ctx => {
+        ctx.clearRect(0, 0, width, 150);
+      });
+
+      // Draw Grid Lines & Time Markers
+      const numGridLines = 8;
+      for (let i = 0; i <= numGridLines; i++) {
+        const gx = (i / numGridLines) * width;
+        [ctxBits, ctxTx, ctxRx, ctxDet].forEach(ctx => {
+          ctx.strokeStyle = '#1e293b';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(gx, 0);
+          ctx.lineTo(gx, 150);
+          ctx.stroke();
+        });
+      }
+
+      // 1. Draw Digital Bits Waveform
+      ctxBits.strokeStyle = '#10b981';
+      ctxBits.lineWidth = 2.5;
+      ctxBits.beginPath();
+
+      const numSamples = 300;
+      let activeBit = 0;
+      for (let i = 0; i < numSamples; i++) {
+        const tSample = tStart + (i / numSamples) * timeWindow;
+        const bIdx = Math.floor(tSample / bitDuration);
+        const normIdx = ((bIdx % bits.length) + bits.length) % bits.length;
+        const bitVal = bits[normIdx];
+        if (i === numSamples - 1) activeBit = bitVal;
+
+        const px = (i / numSamples) * width;
+        const py = bitVal === 1 ? 15 : rectB.height - 15;
+
+        if (i === 0) ctxBits.moveTo(px, py);
+        else ctxBits.lineTo(px, py);
+      }
+      ctxBits.stroke();
+
+      // 2. Draw Transmitted Signal s(t)
+      ctxTx.strokeStyle = '#3b82f6';
+      ctxTx.lineWidth = 2;
+      ctxTx.beginPath();
+
+      let activeF1 = f0 + deltaFMult * (1.0 / bitDuration);
+      for (let i = 0; i < numSamples; i++) {
+        const tSample = tStart + (i / numSamples) * timeWindow;
+        const { tx, f1 } = getSignalAt(tSample);
+        activeF1 = f1;
+        const px = (i / numSamples) * width;
+        const py = (rectTx.height / 2) - tx * (rectTx.height * 0.38);
+
+        if (i === 0) ctxTx.moveTo(px, py);
+        else ctxTx.lineTo(px, py);
+      }
+      ctxTx.stroke();
+
+      // 3. Draw Received Signal r(t)
+      ctxRx.strokeStyle = '#f43f5e';
+      ctxRx.lineWidth = 1.5;
+      ctxRx.beginPath();
+
+      for (let i = 0; i < numSamples; i++) {
+        const tSample = tStart + (i / numSamples) * timeWindow;
+        const { rx } = getSignalAt(tSample);
+        const px = (i / numSamples) * width;
+        const py = (rectRx.height / 2) - rx * (rectRx.height * 0.35);
+
+        if (i === 0) ctxRx.moveTo(px, py);
+        else ctxRx.lineTo(px, py);
+      }
+      ctxRx.stroke();
+
+      // 4. Compute Correlator & Detector Integrals for Current Bit Window
+      const currentBitIndexFloor = Math.floor(time / bitDuration);
+      const currentBitStartTime = currentBitIndexFloor * bitDuration;
+      const currentBitElapsedTime = time - currentBitStartTime;
+      const actualCurrentBit = bits[((currentBitIndexFloor % bits.length) + bits.length) % bits.length];
+
+      // Discrete integration over current bit period
+      const intSteps = 40;
+      let cohMetric0 = 0, cohMetric1 = 0;
+      let noncohI0 = 0, noncohQ0 = 0, noncohI1 = 0, noncohQ1 = 0;
+      let cohAsk = 0, noncohAskI = 0, noncohAskQ = 0;
+
+      const deltaT = currentBitElapsedTime / intSteps;
+      const phaseRad = (phaseOffsetDeg * Math.PI) / 180;
+
+      for (let s = 0; s < intSteps; s++) {
+        const tStep = currentBitStartTime + s * deltaT;
+        const { rx } = getSignalAt(tStep);
+
+        if (mode === 'BFSK') {
+          // Coherent correlators (cos only)
+          cohMetric0 += rx * Math.cos(2 * Math.PI * f0 * tStep) * deltaT;
+          cohMetric1 += rx * Math.cos(2 * Math.PI * activeF1 * tStep) * deltaT;
+
+          // Noncoherent quadrature correlators (I & Q)
+          noncohI0 += rx * Math.cos(2 * Math.PI * f0 * tStep) * deltaT;
+          noncohQ0 += rx * Math.sin(2 * Math.PI * f0 * tStep) * deltaT;
+          noncohI1 += rx * Math.cos(2 * Math.PI * activeF1 * tStep) * deltaT;
+          noncohQ1 += rx * Math.sin(2 * Math.PI * activeF1 * tStep) * deltaT;
+        } else {
+          // ASK
+          cohAsk += rx * Math.cos(2 * Math.PI * fc * tStep) * deltaT;
+          noncohAskI += rx * Math.cos(2 * Math.PI * fc * tStep) * deltaT;
+          noncohAskQ += rx * Math.sin(2 * Math.PI * fc * tStep) * deltaT;
+        }
+      }
+
+      // Detector Metrics
+      let cohDecision = 0;
+      let noncohDecision = 0;
+
+      if (mode === 'BFSK') {
+        const env0 = Math.sqrt(noncohI0 ** 2 + noncohQ0 ** 2);
+        const env1 = Math.sqrt(noncohI1 ** 2 + noncohQ1 ** 2);
+
+        cohDecision = cohMetric1 > cohMetric0 ? 1 : 0;
+        noncohDecision = env1 > env0 ? 1 : 0;
+
+        // Draw dual envelope bars on canvasDet
+        const barW = width * 0.18;
+        const maxH = rectDet.height * 0.75;
+        const midY = rectDet.height - 15;
+
+        // Coherent correlator outputs
+        ctxDet.fillStyle = '#6366f1';
+        const hC0 = Math.min(maxH, Math.max(0, cohMetric0 * 50));
+        const hC1 = Math.min(maxH, Math.max(0, cohMetric1 * 50));
+        ctxDet.fillRect(width * 0.15, midY - hC0, barW, hC0);
+        ctxDet.fillRect(width * 0.36, midY - hC1, barW, hC1);
+
+        // Noncoherent envelopes
+        ctxDet.fillStyle = '#10b981';
+        const hE0 = Math.min(maxH, env0 * 50);
+        const hE1 = Math.min(maxH, env1 * 50);
+        ctxDet.fillRect(width * 0.60, midY - hE0, barW, hE0);
+        ctxDet.fillRect(width * 0.81, midY - hE1, barW, hE1);
+
+        // Labels
+        ctxDet.font = '10px monospace';
+        ctxDet.fillStyle = '#cbd5e1';
+        ctxDet.fillText('Coh y₀ (f₀)', width * 0.15, rectDet.height - 3);
+        ctxDet.fillText('Coh y₁ (f₁)', width * 0.36, rectDet.height - 3);
+        ctxDet.fillText('Noncoh R₀', width * 0.60, rectDet.height - 3);
+        ctxDet.fillText('Noncoh R₁', width * 0.81, rectDet.height - 3);
+
+      } else {
+        // ASK Detection
+        const askEnvelope = Math.sqrt(noncohAskI ** 2 + noncohAskQ ** 2);
+        const askCohThreshold = (bitDuration * 0.25);
+        const askNoncohThreshold = (bitDuration * 0.25);
+
+        cohDecision = cohAsk > askCohThreshold ? 1 : 0;
+        noncohDecision = askEnvelope > askNoncohThreshold ? 1 : 0;
+
+        // Draw ASK bars
+        const maxH = rectDet.height * 0.75;
+        const midY = rectDet.height - 15;
+
+        ctxDet.fillStyle = '#6366f1';
+        const hCoh = Math.min(maxH, Math.max(0, cohAsk * 60));
+        ctxDet.fillRect(width * 0.25, midY - hCoh, width * 0.2, hCoh);
+
+        ctxDet.fillStyle = '#10b981';
+        const hEnv = Math.min(maxH, askEnvelope * 60);
+        ctxDet.fillRect(width * 0.60, midY - hEnv, width * 0.2, hEnv);
+
+        // Threshold Line
+        ctxDet.strokeStyle = '#f43f5e';
+        ctxDet.setLineDash([4, 4]);
+        ctxDet.beginPath();
+        const thY = midY - askNoncohThreshold * 60;
+        ctxDet.moveTo(width * 0.1, thY);
+        ctxDet.lineTo(width * 0.9, thY);
+        ctxDet.stroke();
+        ctxDet.setLineDash([]);
+
+        ctxDet.font = '10px monospace';
+        ctxDet.fillStyle = '#cbd5e1';
+        ctxDet.fillText('Coherent Integral ∫r·cos', width * 0.25, rectDet.height - 3);
+        ctxDet.fillText('Noncoherent √(I²+Q²)', width * 0.60, rectDet.height - 3);
+        ctxDet.fillStyle = '#f43f5e';
+        ctxDet.fillText('Decision Threshold γ', width * 0.75, thY - 4);
+      }
+
+      // End of Bit Error Evaluation
+      if (currentBitIndexFloor !== lastEvaluatedBitIndex && lastEvaluatedBitIndex !== -1) {
+        totalBitsProcessed++;
+        if (cohDecision !== actualCurrentBit) cohErrorCount++;
+        if (noncohDecision !== actualCurrentBit) noncohErrorCount++;
+        updateStats();
+      }
+      lastEvaluatedBitIndex = currentBitIndexFloor;
+
+      // Update Labels
+      lblCurrentBit.textContent = `Current Bit: ${actualCurrentBit} (T = ${(currentBitElapsedTime).toFixed(2)}s / ${bitDuration.toFixed(1)}s)`;
+      if (mode === 'BFSK') {
+        lblCarrierInfo.textContent = actualCurrentBit === 1 ? `Tone f1: ${activeF1.toFixed(1)} Hz` : `Tone f0: ${f0.toFixed(1)} Hz`;
+      } else {
+        lblCarrierInfo.textContent = actualCurrentBit === 1 ? `Carrier On (fc = ${fc.toFixed(1)} Hz)` : `Carrier Off (OOK Space)`;
+      }
+      lblChannelInfo.textContent = `Phase: ${phaseOffsetDeg}° | Noise: σ=${noiseLevel.toFixed(2)}`;
+      
+      const cohMatch = cohDecision === actualCurrentBit ? '✓' : '✗';
+      const noncohMatch = noncohDecision === actualCurrentBit ? '✓' : '✗';
+      lblDecisionInfo.textContent = `Coh: ${cohDecision} ${cohMatch} | Noncoh: ${noncohDecision} ${noncohMatch}`;
+
+      statCohDec.textContent = `Bit ${cohDecision}`;
+      statCohDec.className = `text-lg font-bold font-mono mt-1 ${cohDecision === actualCurrentBit ? 'text-indigo-400' : 'text-rose-400'}`;
+      statNoncohDec.textContent = `Bit ${noncohDecision}`;
+      statNoncohDec.className = `text-lg font-bold font-mono mt-1 ${noncohDecision === actualCurrentBit ? 'text-emerald-400' : 'text-rose-400'}`;
+
+      requestAnimationFrame(animate);
+    }
+
+    // Initial setup
+    initCanvases();
+    updateOrthoStatus();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
